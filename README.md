@@ -8,6 +8,14 @@ and estimates the *dilution* and *contamination factors* affecting the TESS phot
 The tool produces summary tables and diagnostic plots that help assess whether a detected signal 
 is likely on-source or potentially contaminated by nearby stars.
 
+Possible uses:
+
+- To use the Simple Aperture Photometry (SAP) and correct for dilution, which is useful if
+  you want to preserve stellar variability (often flattened out by TESS PDCSAP flux);
+- To determine the dilution (or contamination) factors in the case of a binary star. Useful, for
+  example, when the secondary star is the stellar host, and you want to correct for flux contamination
+  from the primary star.
+
 ## Requirements
 
 - Python 3.10
