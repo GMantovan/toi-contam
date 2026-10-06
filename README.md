@@ -1,6 +1,6 @@
 # TOI contamination analysis
 
-This project packages the TESS contamination script as an installable Python command.
+This package performs a TESS contamination analysis for a target star or TOI. It queries the Gaia catalog around the target, evaluates nearby contaminant sources, and computes the expected contamination contribution using the target aperture and nearby stellar sources. The code produces plots and analysis outputs that can be used to assess whether a detected signal is likely on source. Moreover, it estimates the contamination and dilution factors.
 
 ## Install locally
 
