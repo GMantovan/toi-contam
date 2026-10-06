@@ -4,8 +4,12 @@ This project packages the TESS contamination script as an installable Python com
 
 ## Install locally
 
+Before installing the package, create and activate a dedicated conda environment:
+
 ```bash
-python3 -m pip install -e .
+conda create -y -n toi-contam python=3.10
+conda activate toi-contam
+python -m pip install -e .
 ```
 
 ## Run
