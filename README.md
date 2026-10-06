@@ -50,4 +50,4 @@ including the main catalog-based contamination estimates and comparison figures.
 
 ## Reference
 
-Please cite Mantovan et al., [2022]((https://academic.oup.com/mnras/article/516/3/4432/6692879?login=true)) if you use this tool.
+Please cite Mantovan et al., [2022](https://academic.oup.com/mnras/article/516/3/4432/6692879?login=true) if you use this tool.
