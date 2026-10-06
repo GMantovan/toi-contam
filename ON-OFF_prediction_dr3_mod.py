@@ -181,6 +181,9 @@ def build_catalog_tables(coord, query_radius):
     gaia_table = query_gaia_catalog(coord, query_radius)
     tess_table = query_tic_catalog(coord, query_radius)
     df_gaia = gaia_table.to_pandas()
+    valid = df_gaia["phot_g_mean_mag"].notna().to_numpy()
+    gaia_table = gaia_table[valid]
+    df_gaia = df_gaia.dropna(subset=["phot_g_mean_mag"]).reset_index(drop=True)
     df_tess = tess_table.to_pandas()
     return {
         "gaia_table": gaia_table,
@@ -496,7 +499,6 @@ def main(argv=None):
     # #convert astropy to Pandas
     df_tess = tess.to_pandas()
     df_gaia = r.to_pandas()
-    print(df_gaia.columns)
 
     target_arrays = derive_target_arrays(df_gaia)
     gmag = target_arrays["gmag"]
@@ -889,13 +891,13 @@ def main(argv=None):
         dilut_factor2 = (rel_flux_per_aperture[0][0] + np.sum(rel_flux_per_aperture[0,2:]))/np.sum(rel_flux_per_aperture[0,:])
 
         try:
-            os.remove("on-off/contam.txt")
+            os.remove(f'{OUTPUT_DIR}/contam.txt')
         except OSError:
             pass
 
-        with open('on-off/contam.txt', 'a') as f:
-            f.write('dilutio_factor = '+str(dilut_factor)+'\n')
-            f.write('dilutio_factor2 = '+str(dilut_factor2)+'\n')
+        with open(f'{OUTPUT_DIR}/contam.txt', 'a') as f:
+            f.write('dilution_factor = '+str(dilut_factor)+'\n')
+            f.write('dilution_factor2 = '+str(dilut_factor2)+'\n')
             f.write('cont ratio secondary = '+str(cont_ratio_sec)+'\n')
             f.write('cont ratio primary = '+str(cont_ratio_prim)+'\n')
             f.close
@@ -908,9 +910,9 @@ def main(argv=None):
             numero.append(ufloat(rel_flux_per_aperture[0,i+1],err_flux_per_aperture_try[0,i+1]))
                             
         # print(sum(numero))
-        cont_ratio_prim_err_try = sum(numero)/ufloat(rel_flux_per_aperture[0][0],err_flux_per_aperture_try[0][0])
-        print(cont_ratio_prim_err_try.n, cont_ratio_prim_err_try.s)
-        print('cont ratio primary err = ', cont_ratio_prim_err)
+        #cont_ratio_prim_err_try = sum(numero)/ufloat(rel_flux_per_aperture[0][0],err_flux_per_aperture_try[0][0])
+        #print(cont_ratio_prim_err_try.n, cont_ratio_prim_err_try.s)
+        #print('cont ratio primary err = ', cont_ratio_prim_err)
 
 
         #relative flux
@@ -992,13 +994,13 @@ def main(argv=None):
         dilut_factor2 = (rel_flux_per_aperture[0][0] + np.sum(rel_flux_per_aperture[0,2:]))/np.sum(rel_flux_per_aperture[0,:])
 
         try:
-            os.remove("on-off/contam.txt")
+            os.remove(f'{OUTPUT_DIR}/contam.txt')
         except OSError:
             pass
         
-        with open('on-off/contam.txt', 'a') as f:
-            f.write('dilutio_factor = '+str(dilut_factor)+'\n')
-            f.write('dilutio_factor2 = '+str(dilut_factor2)+'\n')
+        with open(f'{OUTPUT_DIR}/contam.txt', 'a') as f:
+            f.write('dilution_factor = '+str(dilut_factor)+'\n')
+            f.write('dilution_factor2 = '+str(dilut_factor2)+'\n')
             f.write('cont ratio secondary = '+str(cont_ratio_sec)+'\n')
             f.write('cont ratio primary = '+str(cont_ratio_prim)+'\n')
             f.close
@@ -1208,12 +1210,12 @@ def main(argv=None):
 
 
     try:
-        os.remove("on-off/New_planetary_radius.txt")
+        os.remove(f'{OUTPUT_DIR}/New_planetary_radius.txt')
     except OSError:
         pass
 
     try:
-        with open('on-off/New_planetary_radius.txt', 'a') as f:
+        with open(f'{OUTPUT_DIR}/New_planetary_radius.txt', 'a') as f:
             f.write(str(round(rp,3)) +' '+ str(round(e_rp,3))+' (Earth radii) undiluted, custom-estimated\n')
             f.write(str(round(rp_pdcsap,3)) +' '+ str(round(e_rp_pdcsap,3))+' (Earth radii) undiluted, pdcsap\n')
             f.write(str(round(rp_obs,3)) +' '+ str(round(e_rp_obs,3))+' (Earth radii) diluted, sap')
@@ -1263,9 +1265,9 @@ def main(argv=None):
         #df_eb = pd.DataFrame({"eb TESS magnitude":Teb,"depth [mag]":fl_mag, "eb/target ratio":r_st, "Target radius [sun]":s_rad_array, "eb radius [earth radii]":earth_radii})
         df_eb = pd.DataFrame({"eb TESS magnitude":Teb,"depth [mag]":fl_mag, "eb radius":r_st, "Target radius [sun]":s_rad_array, "eb radius [earth radii]":earth_radii})
         if i == 1:
-            df_eb.to_csv("on-off/eb_prevision2b.csv", index = False, header = True, sep = ',')
+            df_eb.to_csv(f'{OUTPUT_DIR}/eb_prevision2b.csv', index = False, header = True, sep = ',')
         else:
-            df_eb.to_csv("on-off/eb_previsionb.csv", index = False, header = True, sep = ',')
+            df_eb.to_csv(f'{OUTPUT_DIR}/eb_previsionb.csv', index = False, header = True, sep = ',')
             
             
 """
