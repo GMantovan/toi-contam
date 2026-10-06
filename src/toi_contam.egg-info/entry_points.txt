@@ -1,0 +1,2 @@
+[console_scripts]
+toi-contam = toi_contam.cli:main

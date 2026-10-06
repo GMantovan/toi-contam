@@ -1,0 +1,33 @@
+Metadata-Version: 2.4
+Name: toi-contam
+Version: 0.1.0
+Summary: TESS contamination analysis
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Requires-Dist: numpy
+Requires-Dist: pandas
+Requires-Dist: scipy
+Requires-Dist: matplotlib
+Requires-Dist: astropy
+Requires-Dist: astroquery
+Requires-Dist: photutils
+Requires-Dist: lightkurve
+Requires-Dist: alive-progress
+
+# TOI contamination analysis
+
+This project packages the TESS ON/OFF contamination script as an installable Python command.
+
+## Install locally
+
+```bash
+python3 -m pip install -e .
+```
+
+## Run
+
+```bash
+toi-contam --target TOI1011.01 --output-dir on-off
+```
+
+You can also pass the other supported options, such as `--custom-aperture` and `--dark`.

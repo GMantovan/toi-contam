@@ -1,0 +1,9 @@
+numpy
+pandas
+scipy
+matplotlib
+astropy
+astroquery
+photutils
+lightkurve
+alive-progress
