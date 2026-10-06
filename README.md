@@ -1,6 +1,6 @@
 # TOI contamination analysis
 
-This project packages the TESS ON/OFF contamination script as an installable Python command.
+This project packages the TESS contamination script as an installable Python command.
 
 ## Install locally
 
