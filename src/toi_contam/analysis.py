@@ -3,7 +3,7 @@ from pathlib import Path
 
 
 def _load_script_module():
-    script_path = Path(__file__).resolve().parents[2] / "ON-OFF_prediction_dr3_mod.py"
+    script_path = Path(__file__).resolve().parents[2] / "toi-contam_dr3.py"
     spec = spec_from_file_location("toi_contam_script", script_path)
     if spec is None or spec.loader is None:
         raise ImportError(f"Could not load script from {script_path}")
