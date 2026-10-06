@@ -1,0 +1,4 @@
+dilution_factor = 0.007445067570987161
+dilution_factor2 = 0.9997327977806117
+cont ratio secondary = 3741.4838846415664
+cont ratio primary = 0.00750091237042906
