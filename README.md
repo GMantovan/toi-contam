@@ -1,11 +1,10 @@
 # TOI contamination analysis
 
-This package performs a TESS ON/OFF contamination analysis for a target star or TOI.
-It queries Gaia and TIC catalogs around the target, evaluates nearby contaminant sources,
-and estimates the dilution and contamination levels affecting the photometric aperture.
+This package performs a TESS contamination analysis for a target star (TOI).
+It queries the Gaia catalog around the target, evaluates nearby contaminant sources,
+and estimates the dilution and contamination factors affecting the photometric aperture.
 
-The tool is packaged as a small Python CLI and produces summary tables and diagnostic plots
-that help assess whether a detected signal is likely on-source or contaminated by nearby stars.
+The tool produces summary tables and diagnostic plots that help assess whether a detected signal is likely on-source or contaminated by nearby stars.
 
 ## Requirements
 
@@ -41,7 +40,7 @@ Available options include:
 
 - `--target`: target name or folder path
 - `--output-dir`: output directory for generated files and plots
-- `--custom-aperture`: use a custom aperture radius in pixels
+- `--custom-aperture`: use a custom circular aperture, radius in pixels
 - `--dark`: enable dark plotting style
 
 ## Outputs
