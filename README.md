@@ -10,11 +10,13 @@ is likely on-source or potentially contaminated by nearby stars.
 
 Possible uses:
 
-- To use the Simple Aperture Photometry (SAP) and correct for dilution, which is useful if
-  you want to preserve stellar variability (often flattened out by TESS PDCSAP flux);
-- To determine the dilution (or contamination) factors in the case of a binary star. Useful, for
-  example, when the secondary star is the stellar host, and you want to correct for flux contamination
-  from the primary star.
+- To check if nearby stars could also generate the detected signal. If not, then the signal is 100% on-source;
+- To perform your own flux dilution corrections on TESS Simple Aperture Photometry (SAP) or your favourite TESS
+  diluted photometry (e.g. PATHOS). This is useful if you want to preserve stellar variability, which is often flattened
+  out in the TESS PDCSAP flux; 
+- To perform proper dilution corrections in the case of binary stars. This is particularly helpful, for example,
+  when you want to correct for flux contamination from the primary star and accurately estimate the planetary radius
+  in cases where the secondary star is the stellar host.
 
 ## Requirements
 
