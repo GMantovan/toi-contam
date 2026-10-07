@@ -44,7 +44,7 @@ toi-contam --target TOI1011.01 --output-dir on-off
 ## Optional arguments
 
 ```bash
-toi-contam --target TOI1011.01 --output-dir on-off --custom-aperture 3 --dark
+toi-contam --target TOI1011.01 --output-dir on-off --custom-aperture 3 --sector 35 --dark
 ```
 
 Available options include:
