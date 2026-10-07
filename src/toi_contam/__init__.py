@@ -1,5 +1,6 @@
 """TOI contamination analysis package."""
 
-__all__ = ["run_analysis"]
-
 from .analysis import run_analysis
+from .config import AnalysisConfig
+
+__all__ = ["AnalysisConfig", "run_analysis"]

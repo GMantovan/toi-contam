@@ -1,28 +1,33 @@
-from importlib.util import module_from_spec, spec_from_file_location
+from __future__ import annotations
+
+import runpy
 from pathlib import Path
 
+from .config import AnalysisConfig
 
-def _load_script_module():
-    script_path = Path(__file__).resolve().parents[2] / "toi-contam_dr3.py"
-    spec = spec_from_file_location("toi_contam_script", script_path)
-    if spec is None or spec.loader is None:
-        raise ImportError(f"Could not load script from {script_path}")
-    module = module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+
+def _legacy_script_path() -> Path:
+    return Path(__file__).resolve().parents[2] / "toi-contam_dr3.py"
 
 
 def run_analysis(target=None, custom_aperture=0, dark=False, output_dir="on-off"):
-    module = _load_script_module()
-    argv = []
+    """Run the scientific analysis through the package entry point.
 
-    if target is not None:
-        argv.extend(["--target", str(target)])
-    if custom_aperture:
-        argv.extend(["--custom-aperture", str(custom_aperture)])
-    if dark:
-        argv.append("--dark")
-    if output_dir != "on-off":
-        argv.extend(["--output-dir", str(output_dir)])
+    The long-term goal is to move the actual analysis code into the package itself,
+    but this keeps the project installable and centralizes the configuration in a
+    dedicated dataclass while the legacy script remains as a compatibility layer.
+    """
+    config = AnalysisConfig.from_arguments(
+        target=target,
+        custom_aperture=custom_aperture,
+        dark=dark,
+        output_dir=output_dir,
+    )
+    script_path = _legacy_script_path()
+    namespace = runpy.run_path(str(script_path))
 
-    return module.main(argv)
+    main = namespace.get("main")
+    if main is None:
+        raise RuntimeError(f"Could not find main() in legacy script: {script_path}")
+
+    return main(config.as_argv())

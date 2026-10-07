@@ -4,6 +4,7 @@ src/toi_contam/__init__.py
 src/toi_contam/__main__.py
 src/toi_contam/analysis.py
 src/toi_contam/cli.py
+src/toi_contam/config.py
 src/toi_contam.egg-info/PKG-INFO
 src/toi_contam.egg-info/SOURCES.txt
 src/toi_contam.egg-info/dependency_links.txt
