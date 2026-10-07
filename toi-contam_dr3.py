@@ -6,9 +6,10 @@ import argparse
 import os
 import re
 import io
-import subprocess
 import warnings
 from functools import lru_cache
+
+warnings.filterwarnings("ignore")
 
 #numpy, scipy, pandas
 import numpy as np
@@ -45,7 +46,9 @@ from photutils.aperture import aperture_photometry
 from lightkurve import search_targetpixelfile
 from alive_progress import alive_bar
 
-warnings.filterwarnings("ignore")
+from uncertainties import ufloat
+from uncertainties import umath_core as um
+from functools import lru_cache
 
 
 def parse_args(argv=None):
@@ -54,6 +57,8 @@ def parse_args(argv=None):
                         help="Target folder or TOI name, e.g. TOI1011.01 or a path.")
     parser.add_argument("--custom-aperture", type=int, default=0,
                         help="Use a custom circular aperture radius in pixels. 0 means default behavior.")
+    parser.add_argument("--sector", type=int, default=None,
+                        help="Override the TESS sector used for the TPF/Tesscut query. Default keeps the target metadata behavior.")
     parser.add_argument("--dark", action="store_true",
                         help="Use the dark plotting style.")
     parser.add_argument("--output-dir", type=str, default="on-off",
@@ -68,6 +73,7 @@ DEFAULT_CONFIG = {
     "output_dir": "on-off",
     "dark": 0,
     "custom_aperture": 0,
+    "sector": None,
     "search_radius_pixels": 10,
     "pixel_size_arcsec": 21,
     "prf_col_offset": 44,
@@ -181,8 +187,6 @@ def build_catalog_tables(coord, query_radius):
     gaia_table = query_gaia_catalog(coord, query_radius)
     tess_table = query_tic_catalog(coord, query_radius)
     df_gaia = gaia_table.to_pandas()
-    valid = df_gaia["phot_g_mean_mag"].notna().to_numpy()
-    gaia_table = gaia_table[valid]
     df_gaia = df_gaia.dropna(subset=["phot_g_mean_mag"]).reset_index(drop=True)
     df_tess = tess_table.to_pandas()
     return {
@@ -398,11 +402,17 @@ def main(argv=None):
     OUTPUT_DIR = args.output_dir
     createFolder(OUTPUT_DIR)
 
+    sector_for_output = args.sector if args.sector is not None else None
+    if sector_for_output is not None:
+        OUTPUT_DIR = os.path.join(args.output_dir, f"sector_{sector_for_output}")
+        createFolder(OUTPUT_DIR)
+
     CONFIG = {
         **DEFAULT_CONFIG,
         "dark": int(args.dark),
         "output_dir": args.output_dir,
         "custom_aperture": args.custom_aperture,
+        "sector": args.sector,
     }
 
     dark = CONFIG["dark"]
@@ -420,7 +430,7 @@ def main(argv=None):
 
     TOI_df = load_toi_catalog()
     target_context = prepare_target_context(url, TOI_df)
-    name = target_context["name"]
+    #name = target_context["name"]
     metadata = target_context["metadata"]
     coord = target_context["coord"]
 
@@ -430,13 +440,29 @@ def main(argv=None):
     ra = metadata["ra"]
     dec = metadata["dec"]
     source = metadata["source"]
-    period = metadata["period"]
-    duration = metadata["duration"]
-    T0 = metadata["t0"]
+    #period = metadata["period"]
+    #duration = metadata["duration"]
+    #T0 = metadata["t0"]
     sector_last = metadata["sector_last"]
+    sector_choice = args.sector if args.sector is not None else sector_last
+    if args.sector is not None:
+        OUTPUT_DIR = os.path.join(args.output_dir, f"sector_{args.sector}")
+        createFolder(OUTPUT_DIR)
     toi_number = metadata["toi_number"]
+    
+    if args.sector is not None:
+            available_sectors = []
+            if metadata.get("source") is not None:
+                available_sectors = [int(s) for s in re.findall(r'\d+', str(TOI_df.loc[toi_number]['Sectors']))]
+            if not available_sectors:
+                available_sectors = [sector_last]
+            if int(args.sector) not in available_sectors:
+                raise ValueError(
+                    f"Requested sector {args.sector} is not available for target {safe_target_name(url)}. "
+                    f"Available sectors: {sorted(available_sectors)}"
+                )
 
-    RAd = coord.ra.deg; Decd = coord.dec.deg
+    #RAd = coord.ra.deg; Decd = coord.dec.deg
 
     ############################################################################################
     #Query to find the stars within a circle of radius configured in DEFAULT_CONFIG
@@ -447,10 +473,10 @@ def main(argv=None):
 
     log_stage("Querying nearby catalogs", f"search radius = {search_radius} TESS pixels")
     catalog_tables = build_catalog_tables(coord, query_radius)
-    r = catalog_tables["gaia_table"]
+    #r = catalog_tables["gaia_table"]
     df_tess = catalog_tables["df_tess"]
     df_gaia = catalog_tables["df_gaia"]
-    log_stage("Catalog query complete", f"Gaia matches = {len(r)}")
+    log_stage("Catalog query complete", f"Gaia matches = {len(df_gaia)}")
 
     _COEFFICIENTS = np.array([
         # Camera 1: CCD 1, 2, 3, 4; coefficients a, b, c, d.
@@ -493,16 +519,9 @@ def main(argv=None):
         """Rimuove lo zero point strumentale come nella versione originale."""
         return np.asarray(tinst) - _coefficients(cam, ccd)[3]
 
-    # #TESS
-    tess = Catalogs.query_region(coord, catalog="TIC", radius = query_radius)
-
-    # #convert astropy to Pandas
-    df_tess = tess.to_pandas()
-    df_gaia = r.to_pandas()
-
     target_arrays = derive_target_arrays(df_gaia)
     gmag = target_arrays["gmag"]
-    gmag_err = target_arrays["gmag_err"]
+    #gmag_err = target_arrays["gmag_err"]
     rra = target_arrays["rra"]
     ddec = target_arrays["ddec"]
     dist = target_arrays["dist"]
@@ -525,15 +544,18 @@ def main(argv=None):
     radius_input = normalize_aperture_radius(aperture_choice["custom_aperture"])
 
     if TOI and source!= 'qlp' and source!='mine':
-        tpf = search_targetpixelfile('TIC '+str(TOI_df.loc[toi_number]['TIC ID'])).download()
+        search_kwargs = {"sector": sector_choice} if sector_choice is not None else {}
+        tpf_first = search_targetpixelfile('TIC '+str(TOI_df.loc[toi_number]['TIC ID']), **search_kwargs)
+        tpf = tpf_first[0].download() # uses the default sector unless the user overrides it
         #The aperture extension header contains the same WCS as that in the Pixels extension.
         wcs = WCS(tpf.hdu[2].header)
     else: 
         """catalog_data = Catalogs.query_region(str(RAd)+' '+str(Decd), catalog="TIC", radius = .01)"""  
         tpf = False
-        hdulist = Tesscut.get_cutouts(coordinates = coord, size = 3)
-        sector = hdulist[0][0].header['SECTOR']
-        # print('sector: ', sector) #TODO should be the one/ones from which we extrapolated the LC
+        tesscut_kwargs = {"coordinates": coord, "size": 3}
+        if sector_choice is not None:
+            tesscut_kwargs["sector"] = sector_choice
+        hdulist = Tesscut.get_cutouts(**tesscut_kwargs)
         hdu1 = hdulist[0] #hdu
         wcs = WCS(hdu1[2].header) #wcs
         
@@ -548,10 +570,13 @@ def main(argv=None):
         n = 0 
         image_head = hdulist[n][1].header
         prime_head = hdulist[n][0].header
-        ap_head = hdulist[n][2].header
+        #ap_head = hdulist[n][2].header
 
     camera = prime_head['CAMERA'] 
     ccd = prime_head['CCD'] 
+    sector = prime_head['SECTOR']
+    
+    log_stage("Sector used", f"{(sector)}")
 
     Tmag = magneiinst(camera, ccd, df_gaia['phot_g_mean_mag'], df_gaia['phot_bp_mean_mag'], df_gaia['phot_rp_mean_mag'])  #TESS magnitudes
     Tmag_err = Tmag - Tmag + 0.006 
@@ -707,16 +732,13 @@ def main(argv=None):
         n = 0 
         image_head = hdulist[n][1].header
         prime_head = hdulist[n][0].header
-        ap_head = hdulist[n][2].header
+        #ap_head = hdulist[n][2].header
 
     col_center = image_head['1CRV4P'] #col
     row_center = image_head['2CRV4P'] #row
 
     # Define the location for which we want to retrieve the PRF.
     prf_col_offset = CONFIG["prf_col_offset"]
-    camera = prime_head['CAMERA'] 
-    ccd = prime_head['CCD'] 
-    sector = prime_head['SECTOR']
 
     # This is the directory where MAST stores the prf FITS files.
     path = CONFIG["prf_fits_base_url"]
@@ -753,11 +775,6 @@ def main(argv=None):
         #Mine function, useful to evaluate the k parameter from PRF.
         #k parameter
         
-        from uncertainties import ufloat
-        from uncertainties import umath_core as um
-        import math
-
-        from functools import lru_cache
         @lru_cache(maxsize=None)
         def prf_cached(col, row, ccd, camera, sector, path):
             return get_prf_at_col_row_fits(col, row, ccd, camera, sector, path)  
@@ -1423,10 +1440,13 @@ Info: not used for now, but could be useful in the future to perform a light-cur
     for i in range(len(rra)):
         if not np.isnan(fl[0][i]):
             ID = df_gaia['source_id'][i]
-            star_LC(ID, rra[i], ddec[i], sector_last, source, duration, period, T0)
+            star_LC(ID, rra[i], ddec[i], sector_choice, source, duration, period, T0)
 """  
 
 
-
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except ValueError as exc:
+        print(f"Error: {exc}")
+        raise SystemExit(1)
