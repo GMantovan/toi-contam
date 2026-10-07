@@ -51,7 +51,8 @@ Available options include:
 
 - `--target`: target name or folder path
 - `--output-dir`: output directory for generated files and plots
-- `--custom-aperture`: to use a custom circular aperture, radius in pixels
+- `--custom-aperture`: to use a custom circular aperture, radius in pixels (default = tpf aperture)
+- `--sector`: to perform the analysis for a specific TESS sector (default = first observed sector)
 - `--dark`: enable dark plotting style
 
 ## Outputs
