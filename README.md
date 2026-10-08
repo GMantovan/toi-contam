@@ -1,5 +1,8 @@
 # TOI contamination analysis
 
+[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+
 This package performs a contamination analysis for a TESS target star (specifying a TOI).
 It queries the Gaia DR3 catalogue around the target, evaluates nearby contaminant sources,
 and estimates the *dilution* and *contamination factors* affecting the TESS photometric aperture 
@@ -17,6 +20,15 @@ Possible uses:
 - To perform proper dilution corrections in the case of binary stars. This is particularly helpful, for example,
   when you want to correct for flux contamination from the primary star and accurately estimate the planetary radius
   in cases where the secondary star is the stellar host.
+
+## Release notes
+
+### v1.0.0
+
+- Initial public release of the TOI contamination analysis tool.
+- Added support for Gaia DR3 based contamination estimates and TESS aperture diagnostics.
+- Included a command-line interface for quick TOI analysis runs.
+- Improved handling of output folders, sector overrides, and custom aperture choices.
 
 ## Requirements
 
