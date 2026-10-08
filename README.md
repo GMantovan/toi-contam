@@ -20,12 +20,13 @@ Possible uses:
 
 ## Requirements
 
-- Python 3.10
-- A dedicated conda environment is recommended
+- Python 3.10+
+- A conda environment is recommended
+- Internet access for Gaia and MAST queries
 
-## Install
+## Installation
 
-Create and activate a dedicated conda environment before installing the package:
+Create and activate a dedicated environment, then install the package in editable mode:
 
 ```bash
 conda create -y -n toi-contam python=3.10
@@ -35,7 +36,7 @@ python -m pip install -e .
 
 ## Quick start
 
-Run the analysis for a specific TOI target:
+Run the analysis for a TOI:
 
 ```bash
 toi-contam --target TOI1011.01 --output-dir on-off
@@ -47,7 +48,7 @@ toi-contam --target TOI1011.01 --output-dir on-off
 toi-contam --target TOI1011.01 --output-dir on-off --custom-aperture 3 --sector 35 --dark
 ```
 
-Available options include:
+## Command-line options
 
 - `--target`: target name or folder path
 - `--output-dir`: output directory for generated files and plots
@@ -60,6 +61,6 @@ Available options include:
 The script writes contamination summaries and diagnostic plots into the selected output directory (see example in *example_folder*),
 including the main catalogue-based contamination estimates and comparison figures.
 
-## Reference
+## Citation
 
 Please cite [Mantovan et al., 2022](https://academic.oup.com/mnras/article/516/3/4432/6692879?login=true) if you use this tool.

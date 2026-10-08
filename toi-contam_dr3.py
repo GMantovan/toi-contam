@@ -105,8 +105,15 @@ def safe_target_name(target_arg=None):
     return os.path.basename(os.path.normpath(target_arg))
 
 
-def load_toi_catalog(csv_path="/home/mantovan/toi_catalog.csv"):
+def load_toi_catalog(csv_path=None):
     """Download and cache the TOI catalog once, then reuse it for repeated runs."""
+    if csv_path is None:
+        csv_path = os.environ.get(
+            "TOI_CATALOG_PATH",
+            os.path.join(os.path.expanduser("~"), ".toi-contam", "toi_catalog.csv"),
+        )
+
+    os.makedirs(os.path.dirname(csv_path) or ".", exist_ok=True)
     if not os.path.exists(csv_path):
         import urllib.request
         url_tess = "https://exofop.ipac.caltech.edu/tess/download_toi.php?sort=toi&output=csv"
