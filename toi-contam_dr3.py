@@ -559,7 +559,7 @@ def main(argv=None):
     else: 
         """catalog_data = Catalogs.query_region(str(RAd)+' '+str(Decd), catalog="TIC", radius = .01)"""  
         tpf = False
-        tesscut_kwargs = {"coordinates": coord, "size": 3}
+        tesscut_kwargs = {"coordinates": coord, "size": 8}
         if sector_choice is not None:
             tesscut_kwargs["sector"] = sector_choice
         hdulist = Tesscut.get_cutouts(**tesscut_kwargs)
