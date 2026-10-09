@@ -52,13 +52,13 @@ python -m pip install -e .
 Run the analysis for a TOI:
 
 ```bash
-toi-contam --target TOI1011.01 --output-dir on-off
+toi-contam --target TOI1011.01 --output-dir TOI1011_contam
 ```
 
 ## Optional arguments
 
 ```bash
-toi-contam --target TOI1011.01 --output-dir on-off --custom-aperture 3 --sector 35 --dark
+toi-contam --target TOI1011.01 --output-dir TOI1011_contam --custom-aperture 3 --sector 35 --dark
 ```
 
 ## Command-line options
