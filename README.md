@@ -27,7 +27,7 @@ Possible uses:
 
 - Initial public release of the TOI contamination analysis tool.
 - Added support for Gaia DR3 based contamination estimates and TESS aperture diagnostics. Gaia to TESS magnitude 
-  conversion following Consolini et al. (in prep).
+  conversion is done following Consolini et al. (in prep).
 - Included a command-line interface for quick TOI analysis runs.
 - Improved handling of output folders, sector overrides, and custom aperture choices.
 
