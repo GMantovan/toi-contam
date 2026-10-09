@@ -9,12 +9,19 @@ class AnalysisConfig:
 
     target: str | None = None
     output_dir: str = "on-off"
-    custom_aperture: int = 0
+    custom_aperture: int | None = None
+    sector: int | None = None
     dark: bool = False
     search_radius_pixels: int = 10
     pixel_size_arcsec: int = 21
     prf_col_offset: int = 44
     prf_image_size: int = 13
+
+    def __post_init__(self):
+        if self.custom_aperture is not None and self.custom_aperture <= 0:
+            self.custom_aperture = None
+        if self.sector is not None and self.sector <= 0:
+            self.sector = None
 
     @classmethod
     def from_arguments(
@@ -22,13 +29,15 @@ class AnalysisConfig:
         *,
         target: str | None = None,
         custom_aperture: int = 0,
+        sector: int | None = None,
         dark: bool = False,
         output_dir: str = "on-off",
     ) -> "AnalysisConfig":
         return cls(
             target=target,
             output_dir=output_dir,
-            custom_aperture=int(custom_aperture),
+            custom_aperture=None if custom_aperture in (None, 0) else int(custom_aperture),
+            sector=None if sector in (None, 0) else int(sector),
             dark=bool(dark),
         )
 
@@ -36,8 +45,10 @@ class AnalysisConfig:
         argv: list[str] = []
         if self.target is not None:
             argv.extend(["--target", str(self.target)])
-        if self.custom_aperture:
+        if self.custom_aperture is not None and self.custom_aperture > 0:
             argv.extend(["--custom-aperture", str(self.custom_aperture)])
+        if self.sector is not None and self.sector > 0:
+            argv.extend(["--sector", str(self.sector)])
         if self.dark:
             argv.append("--dark")
         if self.output_dir != "on-off":

@@ -10,7 +10,7 @@ def _legacy_script_path() -> Path:
     return Path(__file__).resolve().parents[2] / "toi-contam_dr3.py"
 
 
-def run_analysis(target=None, custom_aperture=0, dark=False, output_dir="on-off"):
+def run_analysis(target=None, custom_aperture=0, sector=None, dark=False, output_dir="on-off"):
     """Run the scientific analysis through the package entry point.
 
     The long-term goal is to move the actual analysis code into the package itself,
@@ -20,6 +20,7 @@ def run_analysis(target=None, custom_aperture=0, dark=False, output_dir="on-off"
     config = AnalysisConfig.from_arguments(
         target=target,
         custom_aperture=custom_aperture,
+        sector=sector,
         dark=dark,
         output_dir=output_dir,
     )

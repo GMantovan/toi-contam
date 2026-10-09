@@ -1,7 +1,10 @@
 Metadata-Version: 2.4
 Name: toi-contam
 Version: 1.0.0
-Summary: TESS contamination analysis
+Summary: TESS contamination and dilution analysis for TOI targets
+Author: Giacomo Mantovan
+License: MIT
+Keywords: astronomy,exoplanets,tess,gaia,contamination,dilution
 Requires-Python: >=3.10
 Description-Content-Type: text/markdown
 Requires-Dist: numpy
@@ -16,21 +19,33 @@ Requires-Dist: alive-progress
 
 # TOI contamination analysis
 
-This package performs a TESS contamination analysis for a target star (TOI).
-It queries the Gaia catalog around the target, evaluates nearby contaminant sources,
-and estimates the dilution and contamination factors affecting the photometric aperture.
+This package performs a contamination analysis for a TESS target star (specifying a TOI).
+It queries the Gaia DR3 catalogue around the target, evaluates nearby contaminant sources,
+and estimates the *dilution* and *contamination factors* affecting the TESS photometric aperture 
+("default" from the TPF file or a "custom" one, e.g. a circular aperture).
 
-The tool produces summary tables and diagnostic plots that help assess whether a detected signal is likely on-source or contaminated by nearby stars.
+The tool produces summary tables and diagnostic plots that help assess whether a detected signal 
+is likely on-source or potentially contaminated by nearby stars.
+
+Possible uses:
+
+- To check if nearby stars could also generate the detected signal. If not, then the signal is 100% on-source;
+- To perform your own flux dilution corrections on TESS Simple Aperture Photometry (SAP) or your favourite TESS
+  diluted photometry (e.g. PATHOS). This is useful if you want to preserve stellar variability, which is often flattened
+  out in the TESS PDCSAP flux; 
+- To perform proper dilution corrections in the case of binary stars. This is particularly helpful, for example,
+  when you want to correct for flux contamination from the primary star and accurately estimate the planetary radius
+  in cases where the secondary star is the stellar host.
 
 ## Requirements
 
-- Python 3.10
-- A dedicated conda environment is recommended
-- The astronomy dependencies needed by the analysis workflow
+- Python 3.10+
+- A conda environment is recommended
+- Internet access for Gaia and MAST queries
 
-## Install
+## Installation
 
-Create and activate a dedicated conda environment before installing the package:
+Create and activate a dedicated environment, then install the package in editable mode:
 
 ```bash
 conda create -y -n toi-contam python=3.10
@@ -40,7 +55,7 @@ python -m pip install -e .
 
 ## Quick start
 
-Run the analysis for a TOI target:
+Run the analysis for a TOI:
 
 ```bash
 toi-contam --target TOI1011.01 --output-dir on-off
@@ -49,17 +64,22 @@ toi-contam --target TOI1011.01 --output-dir on-off
 ## Optional arguments
 
 ```bash
-toi-contam --target TOI1011.01 --output-dir on-off --custom-aperture 3 --dark
+toi-contam --target TOI1011.01 --output-dir on-off --custom-aperture 3 --sector 35 --dark
 ```
 
-Available options include:
+## Command-line options
 
 - `--target`: target name or folder path
 - `--output-dir`: output directory for generated files and plots
-- `--custom-aperture`: use a custom circular aperture, radius in pixels
+- `--custom-aperture`: to use a custom circular aperture, radius in pixels (default = tpf aperture)
+- `--sector`: to perform the analysis for a specific TESS sector (default = first observed sector)
 - `--dark`: enable dark plotting style
 
 ## Outputs
 
-The script writes contamination summaries and diagnostic plots into the selected output directory,
-including the main catalog-based contamination estimates and comparison figures.
+The script writes contamination summaries and diagnostic plots into the selected output directory (see example in *example_folder*),
+including the main catalogue-based contamination estimates and comparison figures.
+
+## Citation
+
+Please cite [Mantovan et al., 2022](https://academic.oup.com/mnras/article/516/3/4432/6692879?login=true) if you use this tool.
