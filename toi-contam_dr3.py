@@ -626,8 +626,8 @@ def main(argv=None):
                 """ to find optimal aperture radius; from Huang et al. 2020"""
 
                 tic_ids = TOI_df.loc[toi_number]['TIC ID']
-                sector =  TOI_df.loc[toi_number]['Sectors']
-                numbers = [int(s) for s in re.findall(r'\d+',sector)]
+                sectors =  TOI_df.loc[toi_number]['Sectors']
+                numbers = [int(s) for s in re.findall(r'\d+',sectors)]
                 # print(numbers[0])
                 try:
                     obsTable = Observations.query_criteria(provenance_name="QLP",
