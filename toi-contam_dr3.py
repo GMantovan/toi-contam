@@ -701,7 +701,7 @@ def main(argv=None):
         ax = cb.ax 
         text = ax.yaxis.label
         cb.formatter.set_powerlimits((0, 0))
-        font = matplotlib.font_manager.FontProperties(family='DejaVu Sans', style='italic', size=25)
+        font = matplotlib.font_manager.FontProperties(family='DejaVu Sans', style='italic', size=23)
         text.set_font_properties(font) 
 
         plt.scatter([], [], edgecolor='white', facecolor='none', label='TESS \naperture', s = 200, \
@@ -720,8 +720,8 @@ def main(argv=None):
             plt.scatter(0,0,s=size,c='red',alpha=0.8, edgecolor=None,zorder = 10,\
                         label = r'$\Delta m=$ '+str(int(f-gmag[0]))) 
 
-        legend = plt.legend(fancybox=True, framealpha=0.5, loc='best', facecolor = 'black',\
-                            numpoints = 1, prop = {'size': 18})
+        legend = plt.legend(fancybox=True, framealpha=0.5, loc='upper left', facecolor = 'black',\
+                            numpoints = 1, prop = {'size': 16})
         plt.setp(legend.get_texts(), color='w')
         try:
             plt.savefig(f'{OUTPUT_DIR}/aperture_tess.pdf', format = 'pdf', dpi=fig.dpi, bbox_inches = "tight")
