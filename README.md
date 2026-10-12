@@ -13,7 +13,8 @@ is likely on-source or potentially contaminated by nearby stars.
 
 Possible uses:
 
-- To check if nearby stars could also generate the detected signal. If not, then the signal is 100% on-source;
+- To check if nearby stars could also generate the detected signal. If not, then the signal is 100% on-source. See 
+  an example of a false positive (TOI-154.01) in *example_folder/toi-contam:example.ipynb*;
 - To perform your own flux dilution corrections on TESS Simple Aperture Photometry (SAP) or your favourite TESS
   diluted photometry (e.g. PATHOS). This is useful if you want to preserve stellar variability, which is often flattened
   out in the TESS PDCSAP flux; 
