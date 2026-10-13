@@ -13,7 +13,8 @@ is likely on-source or potentially contaminated by nearby stars.
 
 Possible uses:
 
-- To check if nearby stars could also generate the detected signal. If not, then the signal is 100% on-source;
+- To check if nearby stars could also generate the detected signal. If not, then the signal is 100% on-source. See 
+  an example of a false positive (TOI-154.01) in *example_folder/toi-contam:example.ipynb*;
 - To perform your own flux dilution corrections on TESS Simple Aperture Photometry (SAP) or your favourite TESS
   diluted photometry (e.g. PATHOS). This is useful if you want to preserve stellar variability, which is often flattened
   out in the TESS PDCSAP flux; 
@@ -27,7 +28,11 @@ Possible uses:
 
 - Initial public release of the TOI contamination analysis tool.
 - Added support for Gaia DR3 based contamination estimates and TESS aperture diagnostics. Gaia to TESS magnitude 
+<<<<<<< HEAD
   conversion is done following Consolini et al. (in prep).
+=======
+  conversion done by following Consolini et al. (in prep).
+>>>>>>> 6cfe8c9 (commit test)
 - Included a command-line interface for quick TOI analysis runs.
 - Improved handling of output folders, sector overrides, and custom aperture choices.
 

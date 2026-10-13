@@ -1,0 +1,3 @@
+15.782 0.769 (Earth radii) undiluted, custom-estimated
+15.285 0.769 (Earth radii) undiluted, pdcsap
+15.285 0.769 (Earth radii) diluted, sap
