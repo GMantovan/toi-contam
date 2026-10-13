@@ -31,6 +31,7 @@ from matplotlib import style
 from astropy.io import fits
 from astropy.wcs import WCS
 from astropy.coordinates import SkyCoord
+from astropy.coordinates import Angle
 import astropy.units as u
 import astropy.constants as const
 
@@ -39,6 +40,9 @@ from astroquery.gaia import Gaia
 from astroquery.mast import Catalogs
 from astroquery.mast import Observations
 from astroquery.mast import Tesscut
+
+from astrocut import TessFootprintCutout
+from astrocut import get_tess_sectors
 
 #other
 from photutils.aperture import CircularAperture
@@ -121,8 +125,107 @@ def load_toi_catalog(csv_path=None):
     return pd.read_csv(csv_path, low_memory=False, delimiter=',', index_col=1)
 
 
-def load_target_metadata(target_name=None, toi_df=None):
-    """Return a small dict describing the target and its TOI metadata."""
+def _table_row_get(row, key, default=None):
+    """Access values from astropy Row objects and dict-like rows safely."""
+    if row is None:
+        return default
+    if hasattr(row, "keys") and key in row.keys():
+        return row[key]
+    if hasattr(row, "get"):
+        return row.get(key, default)
+    return default
+
+
+def query_mast_target_metadata(target_name, sector=None):
+    """Query MAST for a target's coordinates, source family, and available sectors.
+
+    If a sector override is supplied, only that sector is used for the metadata lookup.
+    """
+    target_name = safe_target_name(target_name)
+    if not target_name:
+        return {}
+
+    try:
+        sectors_table = Tesscut.get_sectors(objectname=str(target_name).strip())
+    except Exception:
+        sectors_table = None
+
+    if sectors_table is None or len(sectors_table) == 0:
+        return {}
+
+    available_sectors = sorted(list(set(sectors_table["sector"])))
+    if not available_sectors:
+        return {}
+
+    requested_sectors = available_sectors
+    if sector is not None:
+        try:
+            sector = int(sector)
+        except (TypeError, ValueError):
+            sector = None
+        if sector is not None:
+            requested_sectors = [sector]
+
+    source = None
+    ra = None
+    dec = None
+
+    source_priority = {"spoc": 2, "qlp": 1}
+
+    for sector_to_query in requested_sectors:
+        try:
+            obs_table = Observations.query_criteria(
+                objectname=str(target_name).strip(),
+                radius=0.001,
+                dataproduct_type="timeseries",
+                sequence_number=sector_to_query,
+            )
+        except Exception:
+            obs_table = None
+
+        if obs_table is None or len(obs_table) == 0:
+            continue
+
+        for row in obs_table:
+            ra_candidate = _table_row_get(row, "s_ra", None)
+            dec_candidate = _table_row_get(row, "s_dec", None)
+            if ra_candidate is not None:
+                ra = ra_candidate
+            if dec_candidate is not None:
+                dec = dec_candidate
+
+            provenance = str(_table_row_get(row, "provenance_name", "") or "").lower()
+            product_type = str(_table_row_get(row, "dataproduct_type", "") or "").lower()
+
+            detected_source = None
+            if "spoc" in provenance or "tpf" in product_type:
+                detected_source = "spoc"
+            elif "qlp" in provenance or "qlp" in product_type:
+                detected_source = "qlp"
+
+            if detected_source is not None:
+                if source is None or source_priority.get(detected_source, 0) > source_priority.get(source, 0):
+                    source = detected_source
+
+    if source is None:
+        source = "qlp" if any("qlp" in str(_table_row_get(row, "provenance_name", "") or "").lower() for row in (obs_table or [])) else None
+
+    return {
+        "ra": ra,
+        "dec": dec,
+        "source": source,
+        "sector_last": max(requested_sectors),
+        "available_sectors": requested_sectors if sector is not None else available_sectors,
+    }
+
+
+def load_target_metadata(target_name=None, toi_df=None, sector=None):
+    """Return a small dict describing the target and its TOI metadata.
+
+    Coordinates, source family, and sector information are queried directly from MAST.
+    The TOI catalog is only used for the transit-depth values that the scientific
+    calculations still require.
+    """
     if toi_df is None:
         toi_df = load_toi_catalog()
 
@@ -134,25 +237,37 @@ def load_target_metadata(target_name=None, toi_df=None):
         "ra": None,
         "dec": None,
         "source": None,
-        "period": None,
-        "duration": None,
-        "t0": None,
         "sector_last": None,
+        "available_sectors": [],
     }
 
-    if str(target_name[0:3]) == 'TOI':
+    if str(target_name[0:3]).upper() == 'TOI':
         metadata["toi"] = True
         name2 = str(target_name.split("I")[1])
         metadata["toi_number"] = float(name2)
-        row = toi_df.loc[metadata["toi_number"]]
-        metadata["ra"] = row['RA']
-        metadata["dec"] = row['Dec']
-        metadata["source"] = row['Source']
-        metadata["period"] = row['Period (days)']
-        metadata["duration"] = row['Duration (hours)'] / 24
-        metadata["t0"] = row['Epoch (BJD)'] - 2457000
-        sector_last0 = row['Sectors']
-        metadata["sector_last"] = [int(s) for s in re.findall(r'\d+', sector_last0)][-1]
+
+        mast_metadata = query_mast_target_metadata(target_name, sector=sector)
+        if mast_metadata:
+            metadata["ra"] = mast_metadata.get("ra")
+            metadata["dec"] = mast_metadata.get("dec")
+            metadata["source"] = mast_metadata.get("source")
+            metadata["sector_last"] = mast_metadata.get("sector_last")
+            metadata["available_sectors"] = mast_metadata.get("available_sectors", [])
+
+        if metadata["ra"] is None or metadata["dec"] is None:
+            row = toi_df.loc[metadata["toi_number"]]
+            metadata["ra"] = Angle(row['RA'], unit = u.hourangle).deg
+            metadata["dec"] = Angle(row['Dec'], unit = u.degree).deg
+
+        if metadata["source"] is None:
+            row = toi_df.loc[metadata["toi_number"]]
+            metadata["source"] = row['Source']
+
+        if metadata["sector_last"] is None:
+            row = toi_df.loc[metadata["toi_number"]]
+            sector_last0 = row['Sectors']
+            metadata["sector_last"] = [int(s) for s in re.findall(r'\d+', sector_last0)][-1]
+            metadata["available_sectors"] = [int(s) for s in re.findall(r'\d+', str(row['Sectors']))]
 
     return metadata
 
@@ -169,18 +284,19 @@ def query_tic_catalog(coord, radius):
     return Catalogs.query_region(coord, catalog="TIC", radius=radius)
 
 
-def prepare_target_context(target_arg=None, toi_df=None):
+def prepare_target_context(target_arg=None, toi_df=None, sector=None):
     """Load the target metadata and convert it to a coordinate + metadata dict."""
     if toi_df is None:
         toi_df = load_toi_catalog()
 
     target_name = safe_target_name(target_arg)
-    metadata = load_target_metadata(target_name, toi_df)
+    metadata = load_target_metadata(target_name, toi_df, sector=sector)
     validate_target_metadata(metadata)
-    coord = SkyCoord(
-        ra=metadata["ra"], dec=metadata["dec"],
-        unit=(u.hourangle, u.degree), frame='icrs'
-    ) if metadata["ra"] is not None else None
+    # coord = SkyCoord(
+    #     ra=metadata["ra"], dec=metadata["dec"],
+    #     unit=(u.hourangle, u.degree), frame='icrs'
+    # ) if metadata["ra"] is not None else None
+    coord = SkyCoord.from_name(target_name)
 
     return {
         "name": target_name,
@@ -329,7 +445,6 @@ def determineFourClosestPrfLoc(col, row):
     for r in posRows[np.argsort(difrow)[0:2]]:
         for c in posCols[np.argsort(difcol)[0:2]]:
             imagePos.append((c, r))
-
     return imagePos
 
 
@@ -436,8 +551,7 @@ def main(argv=None):
     print("=" * 80 + "\n")
 
     TOI_df = load_toi_catalog()
-    target_context = prepare_target_context(url, TOI_df)
-    #name = target_context["name"]
+    target_context = prepare_target_context(url, TOI_df, sector=args.sector)
     metadata = target_context["metadata"]
     coord = target_context["coord"]
 
@@ -447,9 +561,6 @@ def main(argv=None):
     ra = metadata["ra"]
     dec = metadata["dec"]
     source = metadata["source"]
-    #period = metadata["period"]
-    #duration = metadata["duration"]
-    #T0 = metadata["t0"]
     sector_last = metadata["sector_last"]
     sector_choice = args.sector if args.sector is not None else sector_last
     if args.sector is not None:
@@ -458,18 +569,16 @@ def main(argv=None):
     toi_number = metadata["toi_number"]
     
     if args.sector is not None:
-            available_sectors = []
-            if metadata.get("source") is not None:
-                available_sectors = [int(s) for s in re.findall(r'\d+', str(TOI_df.loc[toi_number]['Sectors']))]
-            if not available_sectors:
-                available_sectors = [sector_last]
-            if int(args.sector) not in available_sectors:
-                raise ValueError(
-                    f"Requested sector {args.sector} is not available for target {safe_target_name(url)}. "
-                    f"Available sectors: {sorted(available_sectors)}"
-                )
-
-    #RAd = coord.ra.deg; Decd = coord.dec.deg
+        available_sectors = metadata.get("available_sectors", []) or []
+        if not available_sectors and sector_last is not None:
+            available_sectors = [sector_last]
+        if not available_sectors:
+            available_sectors = [int(args.sector)]
+        if int(args.sector) not in available_sectors:
+            raise ValueError(
+                f"Requested sector {args.sector} is not available for target {safe_target_name(url)}. "
+                f"Available sectors: {sorted(available_sectors)}"
+            )
 
     ############################################################################################
     #Query to find the stars within a circle of radius configured in DEFAULT_CONFIG
@@ -522,13 +631,8 @@ def main(argv=None):
         valid = np.isfinite(bp) & np.isfinite(rp) & (bp > 0) & (rp > 0)
         return np.where(valid, a * color**3 + b * color**2 + c * color + d + g, g + d)
 
-    def GetTmagCalib(tinst, cam, ccd):
-        """Rimuove lo zero point strumentale come nella versione originale."""
-        return np.asarray(tinst) - _coefficients(cam, ccd)[3]
-
     target_arrays = derive_target_arrays(df_gaia)
     gmag = target_arrays["gmag"]
-    #gmag_err = target_arrays["gmag_err"]
     rra = target_arrays["rra"]
     ddec = target_arrays["ddec"]
     dist = target_arrays["dist"]
@@ -554,30 +658,38 @@ def main(argv=None):
         search_kwargs = {"sector": sector_choice} if sector_choice is not None else {}
         tpf_first = search_targetpixelfile('TIC '+str(TOI_df.loc[toi_number]['TIC ID']), **search_kwargs)
         tpf = tpf_first[0].download() # uses the default sector unless the user overrides it
+        
         #The aperture extension header contains the same WCS as that in the Pixels extension.
         wcs = WCS(tpf.hdu[2].header)
     else: 
         """catalog_data = Catalogs.query_region(str(RAd)+' '+str(Decd), catalog="TIC", radius = .01)"""  
         tpf = False
-        tesscut_kwargs = {"coordinates": coord, "size": 8}
+        size = 7
+        #tesscut_kwargs = {"coordinates": coord, "size": 8}
         if sector_choice is not None:
-            tesscut_kwargs["sector"] = sector_choice
-        hdulist = Tesscut.get_cutouts(**tesscut_kwargs)
+            #tesscut_kwargs["sector"] = sector_choice
+            astrocut_kwargs = {"sequence": [sector_choice]}
+            
+        fp_cutout = TessFootprintCutout(
+            coordinates= coord, 
+            cutout_size=size, 
+            **astrocut_kwargs)
+        
+        hdulist = fp_cutout.tpf_cutouts
+        #hdulist = Tesscut.get_cutouts(**tesscut_kwargs)
+
         hdu1 = hdulist[0] #hdu
         wcs = WCS(hdu1[2].header) #wcs
-        
-        
     ###########
 
     # Pull out the location of the middle of the CCD from the Physics WCS in the header.
     if tpf:
-        image_head = tpf.hdu[1].header 
+        #image_head = tpf.hdu[1].header 
         prime_head = tpf.hdu[0].header
     else:
         n = 0 
-        image_head = hdulist[n][1].header
+        #image_head = hdulist[n][1].header
         prime_head = hdulist[n][0].header
-        #ap_head = hdulist[n][2].header
 
     camera = prime_head['CAMERA'] 
     ccd = prime_head['CCD'] 
@@ -614,8 +726,6 @@ def main(argv=None):
         if tpf:
             tpf_data = tpf.hdu[1].data 
             first_image = tpf_data['FLUX'][1] #data
-            # print(tpf.hdu[1].header['CROWDSAP'], 1/(1+cont_ratio))
-            # print(tpf.hdu[1].header['FLFRCSAP'])
             s = tpf.flux.shape 
             aperture_mask=tpf.pipeline_mask #mask from TPF
         else:
@@ -628,7 +738,6 @@ def main(argv=None):
                 tic_ids = TOI_df.loc[toi_number]['TIC ID']
                 sectors =  TOI_df.loc[toi_number]['Sectors']
                 numbers = [int(s) for s in re.findall(r'\d+',sectors)]
-                # print(numbers[0])
                 try:
                     obsTable = Observations.query_criteria(provenance_name="QLP",
                                            target_name=tic_ids,
@@ -645,7 +754,7 @@ def main(argv=None):
                 lcfile = where
                 lchdu = fits.open(lcfile)
                 rad_ap = lchdu[1].header['BESTAP'][0]
-                # print(rad_ap)
+
                 aperture = CircularAperture(positions, r=int(rad_ap))
             else:
                 if radius_input is None:
@@ -733,16 +842,18 @@ def main(argv=None):
 
     # Pull out the location of the middle of the CCD from the Physics WCS in the header.
     if tpf:
-        image_head = tpf.hdu[1].header 
+        #image_head = tpf.hdu[1].header 
         prime_head = tpf.hdu[0].header
     else:
         n = 0 
-        image_head = hdulist[n][1].header
+        #image_head = hdulist[n][1].header
         prime_head = hdulist[n][0].header
-        #ap_head = hdulist[n][2].header
 
-    col_center = image_head['1CRV4P'] #col
-    row_center = image_head['2CRV4P'] #row
+    # col_center = image_head['1CRV4P'] #col
+    # row_center = image_head['2CRV4P'] #row
+    
+    col_center = int(size / 2) #col
+    row_center = int(size / 2) #row
 
     # Define the location for which we want to retrieve the PRF.
     prf_col_offset = CONFIG["prf_col_offset"]
@@ -926,8 +1037,8 @@ def main(argv=None):
             f.write('cont ratio primary = '+str(cont_ratio_prim)+'\n')
             f.close
         
-        cont_ratio_prim_err = cont_ratio_prim*np.sqrt((np.sqrt(np.sum(err_flux_per_aperture[0,1:]**2))/np.sum(rel_flux_per_aperture[0,1:]))**2 + 
-                            (err_flux_per_aperture[0,0]/rel_flux_per_aperture[0][0])**2)
+        # cont_ratio_prim_err = cont_ratio_prim*np.sqrt((np.sqrt(np.sum(err_flux_per_aperture[0,1:]**2))/np.sum(rel_flux_per_aperture[0,1:]))**2 + 
+        #                     (err_flux_per_aperture[0,0]/rel_flux_per_aperture[0][0])**2)
             
         numero = []                
         for i in range(len(rel_flux_per_aperture[0])-1):
@@ -995,7 +1106,6 @@ def main(argv=None):
 
                     #method "exact", to consider also fractions of pixels inside the circular aperture
                     phot_table = aperture_photometry(this_flux_pix, aperture, method = 'exact')
-                    #print(phot_table)
             
                     if not np.isnan(phot_table['aperture_sum']):
                         rel_flux_per_aperture[kk, i] = phot_table['aperture_sum']
@@ -1104,7 +1214,6 @@ def main(argv=None):
 
         plt.scatter([], [], c='red', alpha=0.6, label='Expected On-Off', s = 35)
         plt.legend(loc = 'best', scatterpoints=1, labelspacing=1, fontsize = 18)
-        
         plt.xlabel('Gaia magnitude', fontsize = 20)
         plt.ylabel('Magnitude variation (On-Off)', fontsize = 20)
         
