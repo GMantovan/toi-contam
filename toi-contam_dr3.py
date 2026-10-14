@@ -266,7 +266,12 @@ def load_target_metadata(target_name=None, toi_df=None, sector=None):
             metadata["dec"] = Angle(row['Dec'], unit = u.degree).deg
 
         if metadata["source"] is None:
-            metadata["source"] = row['Source']
+            #metadata["source"] = row['Source']
+            try:
+                metadata["source"] = "qlp" if "qlp" in row['Source'] else "spoc" if "spoc" in row['Source'] else None
+            except (KeyError, TypeError):
+                metadata["source"] = row['Source']
+            print(metadata["source"])
 
         if metadata["sector_last"] is None:
             sector_last0 = row['Sectors']
@@ -299,7 +304,7 @@ def prepare_target_context(target_arg=None, toi_df=None, sector=None):
     try:
         coord = SkyCoord.from_name(target_name[:-2].strip())
     except Exception:
-        print(f"Warning: Could not resolve coordinates for target {target_name!r} using SkyCoord.from_name().")
+        print(f"Warning: Could not resolve coordinates for target {target_name[:-2]!r} using SkyCoord.from_name().")
         coord = None
     if coord is None:
         coord = SkyCoord(
@@ -733,6 +738,8 @@ def main(argv=None):
     aperture_choice = resolve_aperture_choice(source, CONFIG["custom_aperture"])
     source = aperture_choice["source"]
     radius_input = normalize_aperture_radius(aperture_choice["custom_aperture"])
+    
+    log_stage("Inspecting TPF or aperture photometry files...", f"source = {(source)}, sector = {(sector_choice)}")
 
     if TOI and source!= 'qlp' and source!='mine':
         search_kwargs = {"sector": sector_choice} if sector_choice is not None else {}
@@ -774,8 +781,6 @@ def main(argv=None):
     camera = prime_head['CAMERA'] 
     ccd = prime_head['CCD'] 
     sector = prime_head['SECTOR']
-    
-    log_stage("Sector used", f"{(sector)}")
 
     Tmag = magneiinst(camera, ccd, df_gaia['phot_g_mean_mag'], df_gaia['phot_bp_mean_mag'], df_gaia['phot_rp_mean_mag'])  #TESS magnitudes
     Tmag_err = Tmag - Tmag + 0.006 
