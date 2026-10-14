@@ -141,6 +141,7 @@ def query_mast_target_metadata(target_name, row, sector=None):
 
     If a sector override is supplied, only that sector is used for the metadata lookup.
     """
+    requested_sectors = []
     target_name = safe_target_name(target_name)
     if not target_name:
         return {}
@@ -153,12 +154,11 @@ def query_mast_target_metadata(target_name, row, sector=None):
     if sectors_table is None:
         available_sectors = list(map(int, row['Sectors'].split(','))) 
     else:
-        available_sectors = sorted(list(set(sectors_table["sector"])))
+        available_sectors = [int(x) for x in sorted(set(sectors_table["sector"]))]
         
     if not available_sectors:
         return {}
 
-    requested_sectors = available_sectors
     if sector is not None:
         try:
             sector = int(sector)
@@ -166,6 +166,10 @@ def query_mast_target_metadata(target_name, row, sector=None):
             sector = None
         if sector is not None:
             requested_sectors = [sector]
+        else:
+            requested_sectors = [available_sectors[-1]]
+    else:
+        requested_sectors = [available_sectors[-1]]
 
     source = None
     ra = None
@@ -183,7 +187,6 @@ def query_mast_target_metadata(target_name, row, sector=None):
             )
         except Exception:
             obs_table = None
-            print('no obs table')
 
         if obs_table is None or len(obs_table) == 0:
             continue
@@ -216,8 +219,9 @@ def query_mast_target_metadata(target_name, row, sector=None):
         "ra": ra,
         "dec": dec,
         "source": source,
-        "sector_last": max(requested_sectors),
-        "available_sectors": requested_sectors if sector is not None else available_sectors,
+        "sector_last": max(available_sectors),
+        #"available_sectors": requested_sectors if sector is not None else available_sectors,
+        "available_sectors": available_sectors,
     }
 
 
@@ -517,6 +521,77 @@ def get_prf_at_col_row_fits(col, row, ccd, camera, sector, path):
 
     return interpolatePrf(prfImages, col, row, imagePos)
 
+
+def _compute_and_write_contam(output_dir, k, Tmag_arr, Tmag_err_arr, n_sims=1000, seed=0):
+    """Estimate uncertainties for dilution/contamination via Monte Carlo and write contam.txt.
+
+    Uses magnitude uncertainties to perturb TESS fluxes (A = 10^(-T/2.5)) while
+    keeping the PRF-derived `k` parameter fixed. This gives a realistic
+    propagation of magnitude-driven flux uncertainty into dilution/contamination
+    estimates while avoiding re-evaluating the PRF on every draw.
+    """
+
+    k = np.asarray(k).ravel()
+    Tmag = np.asarray(Tmag_arr).ravel()
+    Tmag_err = np.asarray(Tmag_err_arr).ravel()
+    # safety
+    if Tmag_err.size != Tmag.size:
+        Tmag_err = np.full_like(Tmag, 0.006)
+
+    N = Tmag.size
+    eps = 1e-12
+
+    # nominal fluxes (in the arbitrary units used everywhere in the script)
+    nominal_flux = k * (10**(-Tmag/2.5))
+    denom = np.sum(nominal_flux) + eps
+
+    def _metrics_from_flux(fx):
+        denom = np.sum(fx, axis=-1)[..., None]
+        dil = np.sum(fx[..., 1:], axis=-1) / (denom[..., 0] + eps)
+        dil2 = (np.take(fx, 0, axis=-1) + np.sum(np.take(fx, range(2, N), axis=-1), axis=-1)) / (denom[..., 0] + eps) if N > 2 else np.full(dil.shape, np.nan)
+        cont_prim = np.sum(fx[..., 1:], axis=-1) / ( np.take(fx, 0, axis=-1) + eps)
+        cont_sec = (np.take(fx, 0, axis=-1) + np.sum(np.take(fx, range(2, N), axis=-1), axis=-1)) / ( np.take(fx, 1, axis=-1) + eps) if N > 1 else np.full(dil.shape, np.nan)
+        return dil, dil2, cont_prim, cont_sec
+
+    # Monte Carlo sampling on magnitudes
+    rng = np.random.RandomState(seed)
+    sims = int(n_sims)
+    # draw shape (sims, N)
+    Tmag_samps = rng.normal(loc=Tmag[None, :], scale=Tmag_err[None, :], size=(sims, N))
+    flux_samps = (10**(-Tmag_samps/2.5)) * k[None, :]
+
+    dil_samps, dil2_samps, cont_prim_samps, cont_sec_samps = _metrics_from_flux(flux_samps)
+
+    stats = {
+        'dilution_std': float(np.nanstd(dil_samps, ddof=1)),
+        'dilution2_std': float(np.nanstd(dil2_samps, ddof=1)),
+        'cont_prim_std': float(np.nanstd(cont_prim_samps, ddof=1)),
+        'cont_sec_std': float(np.nanstd(cont_sec_samps, ddof=1)),
+        'nominal': {
+            'dilution': float(np.sum(nominal_flux[1:]) / denom),
+            'dilution2': float((nominal_flux[0] + np.sum(nominal_flux[2:])) / denom) if N > 2 else float(np.nan),
+            'cont_prim': float(np.sum(nominal_flux[1:]) / (nominal_flux[0] + eps)),
+            'cont_sec': float((nominal_flux[0] + np.sum(nominal_flux[2:])) / (nominal_flux[1] + eps)) if N > 1 else float(np.nan),
+        }
+    }
+
+    # write formatted output: 4 significant digits per user request
+    fmt = "{:.4f}"
+    outpath = output_dir
+    try:
+        os.remove(f"{outpath}/contam.txt")
+    except OSError:
+        pass
+
+    with open(f"{outpath}/contam.txt", 'a') as f:
+        f.write('dilution_factor_primary = ' + fmt.format(stats['nominal']['dilution']) + ' ± ' + fmt.format(stats['dilution_std']) + '\n')
+        f.write('dilution_factor_secondary = ' + fmt.format(stats['nominal']['dilution2']) + ' ± ' + fmt.format(stats['dilution2_std']) + '\n')
+        f.write('cont ratio primary = ' + fmt.format(stats['nominal']['cont_prim']) + ' ± ' + fmt.format(stats['cont_prim_std']) + '\n')
+        f.write('cont ratio secondary = ' + fmt.format(stats['nominal']['cont_sec']) + ' ± ' + fmt.format(stats['cont_sec_std']) + '\n')
+        
+
+    return stats
+
 ##################################################################################################
 ########################################### code start ###########################################
 ##################################################################################################
@@ -669,7 +744,7 @@ def main(argv=None):
     else: 
         """catalog_data = Catalogs.query_region(str(RAd)+' '+str(Decd), catalog="TIC", radius = .01)"""  
         tpf = False
-        size = 7
+        size_ap = 9
         #tesscut_kwargs = {"coordinates": coord, "size": 8}
         if sector_choice is not None:
             #tesscut_kwargs["sector"] = sector_choice
@@ -677,7 +752,7 @@ def main(argv=None):
             
         fp_cutout = TessFootprintCutout(
             coordinates= coord, 
-            cutout_size=size, 
+            cutout_size=size_ap, 
             **astrocut_kwargs)
         
         hdulist = fp_cutout.tpf_cutouts
@@ -847,18 +922,17 @@ def main(argv=None):
 
     # Pull out the location of the middle of the CCD from the Physics WCS in the header.
     if tpf:
-        #image_head = tpf.hdu[1].header 
+        image_head = tpf.hdu[1].header 
         prime_head = tpf.hdu[0].header
+        col_center = image_head['1CRV4P'] #col
+        row_center = image_head['2CRV4P'] #row
     else:
         n = 0 
         #image_head = hdulist[n][1].header
         prime_head = hdulist[n][0].header
-
-    # col_center = image_head['1CRV4P'] #col
-    # row_center = image_head['2CRV4P'] #row
+        col_center = int(size_ap / 2) #col
+        row_center = int(size_ap / 2) #row
     
-    col_center = int(size / 2) #col
-    row_center = int(size / 2) #row
 
     # Define the location for which we want to retrieve the PRF.
     prf_col_offset = CONFIG["prf_col_offset"]
@@ -1023,24 +1097,17 @@ def main(argv=None):
         Tmag_err_arr = np.array(Tmag_err) 
         k = rel_flux_per_aperture/(10**(Tmag_arr/(-2.5))) #k parameter
 
-        k_err = 0 #TODO: add the PRF's uncertainty (?)
+        # k_err = 0 #TODO: add the PRF's uncertainty (?)
         
-        cont_ratio_prim = np.sum(rel_flux_per_aperture[0,1:])/rel_flux_per_aperture[0][0]
-        cont_ratio_sec = (rel_flux_per_aperture[0][0] + np.sum(rel_flux_per_aperture[0,2:]))/rel_flux_per_aperture[0][1]
-        dilut_factor = np.sum(rel_flux_per_aperture[0,1:])/np.sum(rel_flux_per_aperture[0,:])
-        dilut_factor2 = (rel_flux_per_aperture[0][0] + np.sum(rel_flux_per_aperture[0,2:]))/np.sum(rel_flux_per_aperture[0,:])
+        # cont_ratio_prim = np.sum(rel_flux_per_aperture[0,1:])/rel_flux_per_aperture[0][0]
+        # cont_ratio_sec = (rel_flux_per_aperture[0][0] + np.sum(rel_flux_per_aperture[0,2:]))/rel_flux_per_aperture[0][1]
+        # dilut_factor = np.sum(rel_flux_per_aperture[0,1:])/np.sum(rel_flux_per_aperture[0,:])
+        # dilut_factor2 = (rel_flux_per_aperture[0][0] + np.sum(rel_flux_per_aperture[0,2:]))/np.sum(rel_flux_per_aperture[0,:])
 
-        try:
-            os.remove(f'{OUTPUT_DIR}/contam.txt')
-        except OSError:
-            pass
-
-        with open(f'{OUTPUT_DIR}/contam.txt', 'a') as f:
-            f.write('dilution_factor = '+str(dilut_factor)+'\n')
-            f.write('dilution_factor2 = '+str(dilut_factor2)+'\n')
-            f.write('cont ratio secondary = '+str(cont_ratio_sec)+'\n')
-            f.write('cont ratio primary = '+str(cont_ratio_prim)+'\n')
-            f.close
+        # Estimate uncertainties via Monte Carlo on magnitudes and write contam.txt
+        stats = _compute_and_write_contam(OUTPUT_DIR, k, Tmag_arr, Tmag_err_arr, n_sims=1000, seed=0)
+        # optionally print summary to console
+        print(f"[info] wrote {OUTPUT_DIR}/contam.txt (dilution={stats['nominal']['dilution']:.3g} ± {stats['dilution_std']:.3g})")
         
         # cont_ratio_prim_err = cont_ratio_prim*np.sqrt((np.sqrt(np.sum(err_flux_per_aperture[0,1:]**2))/np.sum(rel_flux_per_aperture[0,1:]))**2 + 
         #                     (err_flux_per_aperture[0,0]/rel_flux_per_aperture[0][0])**2)
@@ -1127,22 +1194,14 @@ def main(argv=None):
         Tmag_err_arr = np.array(Tmag_err) 
         k = rel_flux_per_aperture/(10**(Tmag_arr/(-2.5))) #k parameter
         
-        cont_ratio_prim = np.sum(rel_flux_per_aperture[0,1:])/rel_flux_per_aperture[0][0]
-        cont_ratio_sec = (rel_flux_per_aperture[0][0] + np.sum(rel_flux_per_aperture[0,2:]))/rel_flux_per_aperture[0][1]
-        dilut_factor = np.sum(rel_flux_per_aperture[0,1:])/np.sum(rel_flux_per_aperture[0,:])
-        dilut_factor2 = (rel_flux_per_aperture[0][0] + np.sum(rel_flux_per_aperture[0,2:]))/np.sum(rel_flux_per_aperture[0,:])
+        # cont_ratio_prim = np.sum(rel_flux_per_aperture[0,1:])/rel_flux_per_aperture[0][0]
+        # cont_ratio_sec = (rel_flux_per_aperture[0][0] + np.sum(rel_flux_per_aperture[0,2:]))/rel_flux_per_aperture[0][1]
+        # dilut_factor = np.sum(rel_flux_per_aperture[0,1:])/np.sum(rel_flux_per_aperture[0,:])
+        # dilut_factor2 = (rel_flux_per_aperture[0][0] + np.sum(rel_flux_per_aperture[0,2:]))/np.sum(rel_flux_per_aperture[0,:])
 
-        try:
-            os.remove(f'{OUTPUT_DIR}/contam.txt')
-        except OSError:
-            pass
-        
-        with open(f'{OUTPUT_DIR}/contam.txt', 'a') as f:
-            f.write('dilution_factor = '+str(dilut_factor)+'\n')
-            f.write('dilution_factor2 = '+str(dilut_factor2)+'\n')
-            f.write('cont ratio secondary = '+str(cont_ratio_sec)+'\n')
-            f.write('cont ratio primary = '+str(cont_ratio_prim)+'\n')
-            f.close
+        # Estimate uncertainties via Monte Carlo on magnitudes and write contam.txt
+        stats = _compute_and_write_contam(OUTPUT_DIR, k, Tmag_arr, Tmag_err_arr, n_sims=1000, seed=0)
+        print(f"[info] wrote {OUTPUT_DIR}/contam.txt (dilution={stats['nominal']['dilution']:.3g} ± {stats['dilution_std']:.3g})")
         
         #relative flux
         rel_flux = (k*(10**(-Tmag_arr/2.5)))/(np.sum((10**(-Tmag_arr/2.5))*k))
