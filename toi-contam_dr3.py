@@ -136,7 +136,7 @@ def _table_row_get(row, key, default=None):
     return default
 
 
-def query_mast_target_metadata(target_name, sector=None):
+def query_mast_target_metadata(target_name, row, sector=None):
     """Query MAST for a target's coordinates, source family, and available sectors.
 
     If a sector override is supplied, only that sector is used for the metadata lookup.
@@ -146,14 +146,15 @@ def query_mast_target_metadata(target_name, sector=None):
         return {}
 
     try:
-        sectors_table = Tesscut.get_sectors(objectname=str(target_name).strip())
+        sectors_table = Tesscut.get_sectors(objectname=str(target_name[:-2]).strip())
     except Exception:
         sectors_table = None
 
-    if sectors_table is None or len(sectors_table) == 0:
-        return {}
-
-    available_sectors = sorted(list(set(sectors_table["sector"])))
+    if sectors_table is None:
+        available_sectors = list(map(int, row['Sectors'].split(','))) 
+    else:
+        available_sectors = sorted(list(set(sectors_table["sector"])))
+        
     if not available_sectors:
         return {}
 
@@ -175,13 +176,14 @@ def query_mast_target_metadata(target_name, sector=None):
     for sector_to_query in requested_sectors:
         try:
             obs_table = Observations.query_criteria(
-                objectname=str(target_name).strip(),
+                objectname=str(target_name[:-2]).strip(),
                 radius=0.001,
                 dataproduct_type="timeseries",
                 sequence_number=sector_to_query,
             )
         except Exception:
             obs_table = None
+            print('no obs table')
 
         if obs_table is None or len(obs_table) == 0:
             continue
@@ -245,8 +247,9 @@ def load_target_metadata(target_name=None, toi_df=None, sector=None):
         metadata["toi"] = True
         name2 = str(target_name.split("I")[1])
         metadata["toi_number"] = float(name2)
+        row = toi_df.loc[metadata["toi_number"]]
 
-        mast_metadata = query_mast_target_metadata(target_name, sector=sector)
+        mast_metadata = query_mast_target_metadata(target_name, row, sector=sector)
         if mast_metadata:
             metadata["ra"] = mast_metadata.get("ra")
             metadata["dec"] = mast_metadata.get("dec")
@@ -255,16 +258,13 @@ def load_target_metadata(target_name=None, toi_df=None, sector=None):
             metadata["available_sectors"] = mast_metadata.get("available_sectors", [])
 
         if metadata["ra"] is None or metadata["dec"] is None:
-            row = toi_df.loc[metadata["toi_number"]]
             metadata["ra"] = Angle(row['RA'], unit = u.hourangle).deg
             metadata["dec"] = Angle(row['Dec'], unit = u.degree).deg
 
         if metadata["source"] is None:
-            row = toi_df.loc[metadata["toi_number"]]
             metadata["source"] = row['Source']
 
         if metadata["sector_last"] is None:
-            row = toi_df.loc[metadata["toi_number"]]
             sector_last0 = row['Sectors']
             metadata["sector_last"] = [int(s) for s in re.findall(r'\d+', sector_last0)][-1]
             metadata["available_sectors"] = [int(s) for s in re.findall(r'\d+', str(row['Sectors']))]
@@ -292,11 +292,16 @@ def prepare_target_context(target_arg=None, toi_df=None, sector=None):
     target_name = safe_target_name(target_arg)
     metadata = load_target_metadata(target_name, toi_df, sector=sector)
     validate_target_metadata(metadata)
-    # coord = SkyCoord(
-    #     ra=metadata["ra"], dec=metadata["dec"],
-    #     unit=(u.hourangle, u.degree), frame='icrs'
-    # ) if metadata["ra"] is not None else None
-    coord = SkyCoord.from_name(target_name)
+    try:
+        coord = SkyCoord.from_name(target_name[:-2].strip())
+    except Exception:
+        print(f"Warning: Could not resolve coordinates for target {target_name!r} using SkyCoord.from_name().")
+        coord = None
+    if coord is None:
+        coord = SkyCoord(
+            ra=metadata["ra"], dec=metadata["dec"],
+            unit=(u.degree, u.degree), frame='icrs'
+        ) if metadata["ra"] is not None else None
 
     return {
         "name": target_name,
