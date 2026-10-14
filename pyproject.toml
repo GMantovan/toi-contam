@@ -27,6 +27,7 @@ dependencies = [
   "matplotlib",
   "astropy",
   "astroquery",
+  "astrocut",
   "photutils",
   "lightkurve",
   "alive-progress",
