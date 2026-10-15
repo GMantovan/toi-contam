@@ -5,7 +5,7 @@
 
 This package performs a contamination analysis for a TESS target star (specifying a TOI).
 It queries the Gaia DR3 catalogue around the target, evaluates nearby contaminant sources,
-and estimates the *dilution factor* (DF) and *contamination ratio* (CR) affecting the TESS photometric aperture 
+and estimates the *dilution factor* (*DF*) and *contamination ratio* (*CR*) affecting the TESS photometric aperture 
 ("default" from the TPF file or a "custom" one, e.g. a circular aperture).
 
 The tool produces summary tables and diagnostic plots that help assess whether a detected signal 
@@ -30,7 +30,7 @@ For a target star with flux $F_{\star}$ and contaminant sources with fluxes $F_i
 
   $DF = \frac{\sum_i F_i}{F_{\star} + \sum_i F_i}$
 
-  where $F_{\star} + \sum_i F_i$ is the total flux in the aperture, and measures the fraction of flux that 
+  where $F_{\star} + \sum_i F_i$ is the total flux in the aperture, and *DF* measures the fraction of flux that 
   comes from nearby contaminating stars.
 
 - Contamination ratio:
