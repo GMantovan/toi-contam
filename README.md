@@ -28,7 +28,7 @@ For a target star with flux $F_{\star}$ and contaminant sources with fluxes $F_i
 
 - Dilution factor:
 
-  $$ D = \frac{\sum_i F_i}{F_{\star} + \sum_i F_i} $$
+  D = $\frac{\sum_i F_i}{F_{\star} + \sum_i F_i}$
 
   where $F_{\star} + \sum_i F_i$ is the total flux in the aperture, and measures the fraction of flux that 
   comes from nearby contaminating stars.
