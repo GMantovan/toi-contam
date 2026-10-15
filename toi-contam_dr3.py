@@ -14,17 +14,17 @@ warnings.filterwarnings("ignore")
 #numpy, scipy, pandas
 import numpy as np
 import pandas as pd
-import scipy
-from scipy.integrate import dblquad
+#import scipy
+#from scipy.integrate import dblquad
 
 #matplotlib
 import matplotlib
-import matplotlib.colors as mc
-import matplotlib.tri as tri
+#import matplotlib.colors as mc
+#import matplotlib.tri as tri
 #get_ipython().run_line_magic('matplotlib', 'inline')
 from matplotlib import pyplot as plt
-from matplotlib import rc
-from matplotlib import patches
+#from matplotlib import rc
+#from matplotlib import patches
 from matplotlib import style
 
 #astropy
@@ -42,7 +42,7 @@ from astroquery.mast import Observations
 from astroquery.mast import Tesscut
 
 from astrocut import TessFootprintCutout
-from astrocut import get_tess_sectors
+##from astrocut import get_tess_sectors
 
 #other
 from photutils.aperture import CircularAperture
@@ -51,7 +51,7 @@ from lightkurve import search_targetpixelfile
 from alive_progress import alive_bar
 
 from uncertainties import ufloat
-from uncertainties import umath_core as um
+#from uncertainties import umath_core as um
 from functools import lru_cache
 
 
@@ -266,12 +266,10 @@ def load_target_metadata(target_name=None, toi_df=None, sector=None):
             metadata["dec"] = Angle(row['Dec'], unit = u.degree).deg
 
         if metadata["source"] is None:
-            #metadata["source"] = row['Source']
             try:
                 metadata["source"] = "qlp" if "qlp" in row['Source'] else "spoc" if "spoc" in row['Source'] else None
             except (KeyError, TypeError):
                 metadata["source"] = row['Source']
-            print(metadata["source"])
 
         if metadata["sector_last"] is None:
             sector_last0 = row['Sectors']
@@ -304,7 +302,7 @@ def prepare_target_context(target_arg=None, toi_df=None, sector=None):
     try:
         coord = SkyCoord.from_name(target_name[:-2].strip())
     except Exception:
-        print(f"Warning: Could not resolve coordinates for target {target_name[:-2]!r} using SkyCoord.from_name().")
+        #print(f"Warning: Could not resolve coordinates for target {target_name[:-2]!r} using SkyCoord.from_name().")
         coord = None
     if coord is None:
         coord = SkyCoord(
@@ -665,11 +663,9 @@ def main(argv=None):
                 f"Available sectors: {sorted(available_sectors)}"
             )
 
-    ############################################################################################
-    #Query to find the stars within a circle of radius configured in DEFAULT_CONFIG
+    # Query nearby Gaia stars within the configured TESS-pixel radius.
     pixel_size = CONFIG["pixel_size_arcsec"] * u.arcsec
     search_radius = CONFIG["search_radius_pixels"]
-    ############################################################################################
     query_radius = search_radius * pixel_size
 
     log_stage("Querying nearby catalogs", f"search radius = {search_radius} TESS pixels")
@@ -709,7 +705,7 @@ def main(argv=None):
         return _COEFFICIENTS[int(cam) - 1, int(ccd) - 1]
 
     def magneiinst(cam, ccd, gnei, bpnei, rpnei):
-        """Mantiene il polinomio e il fallback G + zero point originali."""
+        """Apply the TESS magnitude transformation and keep the original G-band fallback."""
         a, b, c, d = _coefficients(cam, ccd)
         g, bp, rp = np.broadcast_arrays(gnei, bpnei, rpnei)
         color = bp - rp
@@ -722,9 +718,7 @@ def main(argv=None):
     ddec = target_arrays["ddec"]
     dist = target_arrays["dist"]
 
-    ################################################################################################
-    #################################### Transit DEPTH (from TIC) ##################################
-    ################################################################################################
+    # Transit depth from the TOI/TIC catalog.
     depth_info = compute_depth_info(TOI_df, toi_number, TOI)
     depth = depth_info["depth"]
     e_depth = depth_info["e_depth"]
@@ -739,7 +733,7 @@ def main(argv=None):
     source = aperture_choice["source"]
     radius_input = normalize_aperture_radius(aperture_choice["custom_aperture"])
     
-    log_stage("Inspecting TPF or aperture photometry files...", f"source = {(source)}, sector = {(sector_choice)}")
+    log_stage("Inspecting aperture file", f"source = {(source)}, sector = {(sector_choice)}")
 
     if TOI and source!= 'qlp' and source!='mine':
         search_kwargs = {"sector": sector_choice} if sector_choice is not None else {}
@@ -767,15 +761,12 @@ def main(argv=None):
 
         hdu1 = hdulist[0] #hdu
         wcs = WCS(hdu1[2].header) #wcs
-    ###########
 
     # Pull out the location of the middle of the CCD from the Physics WCS in the header.
-    if tpf:
-        #image_head = tpf.hdu[1].header 
+    if tpf: 
         prime_head = tpf.hdu[0].header
     else:
         n = 0 
-        #image_head = hdulist[n][1].header
         prime_head = hdulist[n][0].header
 
     camera = prime_head['CAMERA'] 
@@ -784,8 +775,6 @@ def main(argv=None):
 
     Tmag = magneiinst(camera, ccd, df_gaia['phot_g_mean_mag'], df_gaia['phot_bp_mean_mag'], df_gaia['phot_rp_mean_mag'])  #TESS magnitudes
     Tmag_err = Tmag - Tmag + 0.006 
-
-    ###########
         
     #Coordinates
     ra = rra; dec = ddec #Gaia
@@ -803,9 +792,7 @@ def main(argv=None):
     ##################################################################################################
     with plt.style.context('default'):
         
-        #Figure: Aperture TESS
         plt.rcParams.update({'font.size': 20})
-        #fig, ax = plt.subplots(1, 1, sharey=True, figsize = (15,9))
         fig = plt.figure(figsize = (15,9))
 
         if tpf:
@@ -922,19 +909,12 @@ def main(argv=None):
         except ValueError:
             pass
 
-    # The module-level PRF helpers above are the single source of truth.
-    # This legacy duplicate block has been removed to keep one implementation.
-
     # Pull out the location of the middle of the CCD from the Physics WCS in the header.
     if tpf:
-        image_head = tpf.hdu[1].header 
-        prime_head = tpf.hdu[0].header
+        image_head = tpf.hdu[1].header
         col_center = image_head['1CRV4P'] #col
         row_center = image_head['2CRV4P'] #row
     else:
-        n = 0 
-        #image_head = hdulist[n][1].header
-        prime_head = hdulist[n][0].header
         col_center = int(size_ap / 2) #col
         row_center = int(size_ap / 2) #row
     
@@ -974,9 +954,7 @@ def main(argv=None):
         ap = np.array(ap) 
         ap = np.array([ap])
 
-        #Mine function, useful to evaluate the k parameter from PRF.
-        #k parameter
-        
+        ### Mine function, useful to evaluate the k parameter from PRF ###
         @lru_cache(maxsize=None)
         def prf_cached(col, row, ccd, camera, sector, path):
             return get_prf_at_col_row_fits(col, row, ccd, camera, sector, path)  
@@ -995,7 +973,6 @@ def main(argv=None):
                     A = 10**(-Tmag[i]/2.5)
                     A_err = A*((np.log(10)/2.5)*Tmag_err[i])
                     A_err_prov = 10**(-ufloat(Tmag[i], Tmag_err[i])/2.5)
-                    #print(A_err - A_err_prov.s)
                     # evaluate flux (from PRF) in each pixel
                     this_flux = 0
                     this_flux_err = 0
@@ -1021,20 +998,20 @@ def main(argv=None):
                         if posx > 0:
                             weightx = 1 - posx 
                             weightx2 = posx
-                            col_off = 1  #to change the selected pixel (col)
+                            col_off = 1
                         else: 
                             weightx = 1 + posx 
                             weightx2 = -posx
-                            col_off = -1 #to change the selected pixel (col)
+                            col_off = -1
                         #row weight
                         if posy > 0:
                             weighty = 1 - posy 
                             weighty2 = posy
-                            row_off = 1  #to change the selected pixel (row)
+                            row_off = 1
                         else:
                             weighty = 1 + posy 
                             weighty2 = -posy
-                            row_off = -1 #to change the selected pixel (row)
+                            row_off = -1
                         #weights (clockwise)
                         weightA = weightx*weighty   #upper right
                         weightB = weightx*weighty2  #lower right
@@ -1058,8 +1035,8 @@ def main(argv=None):
                                 #+0.5 is necessary because we are using the int() approx.
                                 row = int(this_pixel[1]+0.5+pixel_row[jj]-(mu_y-center[1])-off_y)
                                 col = int(this_pixel[0]+0.5+pixel_col[jj]-(mu_x-center[0])-off_x)
-                                #to skip negative index
-                                if row < 0 or col < 0:
+                                
+                                if row < 0 or col < 0: #to skip negative index
                                     skip = True
 
                                 prf = prf_cached(col_center + mu_x + prf_col_offset,
@@ -1070,7 +1047,7 @@ def main(argv=None):
                                 this_flux_pix += w[jj]*A*prf_val
                                 this_flux_pix_err += (w[jj]*A_err*prf_val)**2
                                                             
-                                this_flux_pix_err_try.append(w[jj]*A_err_prov*prf_val) #ufloat
+                                this_flux_pix_err_try.append(w[jj]*A_err_prov*prf_val)
                                                             
                             this_flux_pix_err_try2 = sum(this_flux_pix_err_try)
                                                                                        
@@ -1087,7 +1064,6 @@ def main(argv=None):
                             this_flux_err_try.append(this_flux_pix_err_try2)                        
                         
                         this_flux_err_try2 = sum(this_flux_err_try)
-                        #print(this_flux_err - this_flux_err_try2.s)
                             
                     #separation (arcseconds) from the center of the aperture.
                     sep_ctr.append(np.sqrt((mu_x-center[0]+off_x)**2+(mu_y-center[1]+off_y)**2))
@@ -1101,8 +1077,6 @@ def main(argv=None):
         Tmag_arr = np.array(Tmag) 
         Tmag_err_arr = np.array(Tmag_err) 
         k = rel_flux_per_aperture/(10**(Tmag_arr/(-2.5))) #k parameter
-
-        # k_err = 0 #TODO: add the PRF's uncertainty (?)
         
         # cont_ratio_prim = np.sum(rel_flux_per_aperture[0,1:])/rel_flux_per_aperture[0][0]
         # cont_ratio_sec = (rel_flux_per_aperture[0][0] + np.sum(rel_flux_per_aperture[0,2:]))/rel_flux_per_aperture[0][1]
@@ -1112,20 +1086,11 @@ def main(argv=None):
         # Estimate uncertainties via Monte Carlo on magnitudes and write contam.txt
         stats = _compute_and_write_contam(OUTPUT_DIR, k, Tmag_arr, Tmag_err_arr, n_sims=1000, seed=0)
         # optionally print summary to console
-        print(f"[info] wrote {OUTPUT_DIR}/contam.txt (dilution={stats['nominal']['dilution']:.3g} ± {stats['dilution_std']:.3g})")
-        
-        # cont_ratio_prim_err = cont_ratio_prim*np.sqrt((np.sqrt(np.sum(err_flux_per_aperture[0,1:]**2))/np.sum(rel_flux_per_aperture[0,1:]))**2 + 
-        #                     (err_flux_per_aperture[0,0]/rel_flux_per_aperture[0][0])**2)
+        print(f"[info] Contamination file written (dilution={stats['nominal']['dilution']:.4f} ± {stats['dilution_std']:.4f})")
             
-        numero = []                
-        for i in range(len(rel_flux_per_aperture[0])-1):
-            numero.append(ufloat(rel_flux_per_aperture[0,i+1],err_flux_per_aperture_try[0,i+1]))
-                            
-        # print(sum(numero))
-        #cont_ratio_prim_err_try = sum(numero)/ufloat(rel_flux_per_aperture[0][0],err_flux_per_aperture_try[0][0])
-        #print(cont_ratio_prim_err_try.n, cont_ratio_prim_err_try.s)
-        #print('cont ratio primary err = ', cont_ratio_prim_err)
-
+        # numero = []                
+        # for i in range(len(rel_flux_per_aperture[0])-1):
+        #     numero.append(ufloat(rel_flux_per_aperture[0,i+1],err_flux_per_aperture_try[0,i+1]))
 
         #relative flux
         rel_flux = (k*(10**(-Tmag_arr/2.5)))/(np.sum((10**(-Tmag_arr/2.5))*k))
@@ -1136,7 +1101,7 @@ def main(argv=None):
         err_2 = np.sqrt(err_0+err_1)
         err_3 = (2.5/np.log(10))*(err_2)
 
-        err_flux = err_2*rel_flux #useful later
+        err_flux = err_2*rel_flux
 
         #flux ratio (mag)
         fl = -2.5*np.log10(1-depth/rel_flux)
@@ -1206,8 +1171,8 @@ def main(argv=None):
 
         # Estimate uncertainties via Monte Carlo on magnitudes and write contam.txt
         stats = _compute_and_write_contam(OUTPUT_DIR, k, Tmag_arr, Tmag_err_arr, n_sims=1000, seed=0)
-        print(f"[info] wrote {OUTPUT_DIR}/contam.txt (dilution={stats['nominal']['dilution']:.3g} ± {stats['dilution_std']:.3g})")
-        
+        print(f"[info] Contamination file written (dilution={stats['nominal']['dilution']:.4f} ± {stats['dilution_std']:.4f})")
+
         #relative flux
         rel_flux = (k*(10**(-Tmag_arr/2.5)))/(np.sum((10**(-Tmag_arr/2.5))*k))
 
@@ -1257,11 +1222,9 @@ def main(argv=None):
 
 
     def final_figure(sel, gmag, fl, err_3, rra, dist, cb):
-        verify = False
         fig, ax = plt.subplots(1, 1, sharey=True, figsize = (15,9))
         cont_fig = 0
         for i in range(len(rra)):
-            norm = plt.Normalize(0, 210)
             plt.axhline(y=0, color = "grey")
         
         if sel == 0:
@@ -1317,8 +1280,6 @@ def main(argv=None):
         depth2 = depth/rel_flux
         e_depth2 = depth2*(err_flux/rel_flux)
 
-        # print("depth =",depth, ", undiluted depth =",depth2[0][0])
-
         first = True
         dep = []; depmag = []; dis = []; kpar = []; gg = []; gaga = []; dist_min = 0; sep_ctr2 = []
         for i in range(len(rra)):
@@ -1330,12 +1291,9 @@ def main(argv=None):
                 gg.append(gmag[i])
                 gaga.append('Gaia DR3 '+str(df_gaia['source_id'][i]))
                 sep_ctr2.append(sep_ctr[i]*21)
-                # print('depth (flux) = ',depth2[0][i],', depth (mag) = ',-2.5*np.log10(1-depth2[0][i]),\
-                #       ', sep target (arcsec) = ', dist[i],', k = ', k[0][i],', g mag = ', gmag[i])
 
                 if first:
                     if i != 0:
-                        # print('distance of the first possible contaminant analyzed = ', dist[i])
                         dist_min = dist[i]
                         first = False
 
@@ -1379,7 +1337,7 @@ def main(argv=None):
         return depth2, e_depth2, dist_min
 
 
-    log_stage("Computing contamination summary", "writing the contamination tables and final figures")
+    log_stage("Writing the contamination tables and final figures")
     #################### contaminant limit.. when depth (Delta F/F) -> 1
     depth2, e_depth2, dist_min = compute_contamination_summary()
 
@@ -1409,7 +1367,6 @@ def main(argv=None):
     #diluted planetary radius (obs)
     rp_obs = (np.sqrt(depth)*s_rad)*(RSUN/REARTH)
     e_rp_obs = rp*(np.sqrt((e_s_rad/s_rad)**2+((0.5*e_depth)/(depth**(-3/2)))**2))
-
 
     try:
         os.remove(f'{OUTPUT_DIR}/New_planetary_radius.txt')

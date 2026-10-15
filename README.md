@@ -5,7 +5,7 @@
 
 This package performs a contamination analysis for a TESS target star (specifying a TOI).
 It queries the Gaia DR3 catalogue around the target, evaluates nearby contaminant sources,
-and estimates the *dilution* and *contamination factors* affecting the TESS photometric aperture 
+and estimates the *dilution factor* (*DF*) and *contamination ratio* (*CR*) affecting the TESS photometric aperture 
 ("default" from the TPF file or a "custom" one, e.g. a circular aperture).
 
 The tool produces summary tables and diagnostic plots that help assess whether a detected signal 
@@ -22,15 +22,32 @@ Possible uses:
   when you want to correct for flux contamination from the primary star and accurately estimate the planetary radius
   in cases where the secondary star is the stellar host.
 
+### Definitions used in the code
+
+For a target star with flux $F_{\star}$ and contaminant sources with fluxes $F_i$, the quantities used here are:
+
+- Dilution factor:
+
+  $DF = \frac{\sum_i F_i}{F_{\star} + \sum_i F_i}$
+
+  where $F_{\star} + \sum_i F_i$ is the total flux in the aperture, and *DF* measures the fraction of flux that 
+  comes from nearby contaminating stars.
+
+- Contamination ratio:
+
+  $CR = \frac{\sum_i F_i}{F_{\star}}$
+
+  which measures how much contaminant flux is present relative to the target star itself.
+
 ## Release notes
 
 ### v1.0.0
 
-- Initial public release of the TOI contamination analysis tool.
+- First public release of the TOI contamination analysis tool.
 - Added support for Gaia DR3 based contamination estimates and TESS aperture diagnostics. Gaia to TESS magnitude 
   conversion is done following Consolini et al. (in prep).
 - Included a command-line interface for quick TOI analysis runs.
-- Improved handling of output folders, sector overrides, and custom aperture choices.
+- Improved handling of output folders, sector and custom aperture choices.
 
 ## Requirements
 
