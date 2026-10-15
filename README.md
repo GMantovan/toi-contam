@@ -57,9 +57,11 @@ For a target star with flux $F_{\star}$ and contaminant sources with fluxes $F_i
 
 ## Installation
 
-Create and activate a dedicated environment, then install the package in editable mode:
+After cloning the repository, create and activate a dedicated environment, then install the package in editable mode from the project root:
 
 ```bash
+git clone https://github.com/GMantovan/toi-contam.git
+cd <your-repo>
 conda create -y -n toi-contam python=3.10
 conda activate toi-contam
 python -m pip install -e .
